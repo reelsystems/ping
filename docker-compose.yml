@@ -1,0 +1,229 @@
+version: '3.8'
+
+# ForgeRock Identity Platform Stack for Zero Trust Architecture
+# Target: Windows Server 2019 with Docker Desktop
+# Network: 192.168.1.0/24
+# Domain: devnetwork.dev
+# DoD Zero Trust Compliance Configuration
+
+networks:
+  forgerock-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/24
+
+volumes:
+  pingds-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PING_DATA_PATH}/ds
+  pingam-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PING_DATA_PATH}/am
+  pingidm-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PING_DATA_PATH}/idm
+  pinggateway-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PING_DATA_PATH}/gateway
+
+services:
+
+  # ============================================================================
+  # ForgeRock Directory Services (PingDS)
+  # Provides LDAP directory services and data store for AM/IDM
+  # ============================================================================
+  pingds:
+    image: gcr.io/forgerock-io/ds/pit1:8.0.0
+    container_name: pingds.devnetwork.dev
+    hostname: pingds.devnetwork.dev
+    networks:
+      forgerock-network:
+        ipv4_address: 172.16.0.10
+    ports:
+      - "1389:1389"     # LDAP
+      - "1636:1636"     # LDAPS
+      - "4444:4444"     # Admin connector
+      - "8080:8080"     # HTTP
+      - "8443:8443"     # HTTPS
+    environment:
+      - DS_SET_UID_ADMIN_AND_MONITOR_PASSWORDS=password
+      - DS_BOOTSTRAP_REPLICATION_SERVERS=pingds.devnetwork.dev:8989
+      - DEPLOYMENT_KEY=${DEPLOYMENT_KEY}
+      - DEPLOYMENT_KEY_PATH=/opt/opendj/deployment.key
+    volumes:
+      - pingds-data:/opt/opendj/data
+      - ./config/ds:/opt/opendj/config-custom
+      - ./scripts/ds:/opt/opendj/scripts-custom
+      - ./secrets:/opt/opendj/secrets
+    healthcheck:
+      test: ["CMD", "/opt/opendj/bin/ldapsearch", "--hostname", "localhost", "--port", "1389", "--bindDN", "cn=Directory Manager", "--bindPassword", "password", "--baseDN", "cn=config", "--searchScope", "base", "(objectclass=*)", "1.1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    labels:
+      - "com.forgerock.service=directory"
+      - "com.forgerock.compliance=dod-zerotrust"
+
+  # ============================================================================
+  # ForgeRock Access Management (PingAM)
+  # Authentication, Authorization, SSO, Federation (SAML/OAuth/OIDC)
+  # ============================================================================
+  pingam:
+    image: gcr.io/forgerock-io/am/pit1:8.0.0
+    container_name: pingam.devnetwork.dev
+    hostname: pingam.devnetwork.dev
+    networks:
+      forgerock-network:
+        ipv4_address: 172.16.0.20
+    ports:
+      - "8081:8080"     # HTTP
+      - "8444:8443"     # HTTPS
+    environment:
+      - AM_STORES_CTS_SERVERS=pingds.devnetwork.dev:1389
+      - AM_STORES_USER_SERVERS=pingds.devnetwork.dev:1389
+      - AM_SERVER_FQDN=pingam.devnetwork.dev
+      - AM_DEPLOYMENT_KEY=${DEPLOYMENT_KEY}
+      - AM_PASSWORDS_AMADMIN_CLEAR=${AM_ADMIN_PASSWORD}
+      - AM_STORES_CTS_USERNAME=uid=am-identity-bind-account,ou=admins,ou=identities
+      - AM_STORES_CTS_PASSWORD=${DS_PASSWORD}
+      - AM_STORES_USER_USERNAME=uid=am-identity-bind-account,ou=admins,ou=identities
+      - AM_STORES_USER_PASSWORD=${DS_PASSWORD}
+      - CATALINA_OPTS=-server -Xmx2g -Xms2g
+      - DS_HOST=pingds.devnetwork.dev
+      - DS_PORT=1389
+    volumes:
+      - pingam-data:/opt/am/data
+      - ./config/am:/opt/am/config-custom
+      - ./scripts/am:/opt/am/scripts-custom
+      - ./secrets:/opt/am/secrets
+    depends_on:
+      pingds:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/am/isAlive.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    labels:
+      - "com.forgerock.service=access-management"
+      - "com.forgerock.compliance=dod-zerotrust"
+
+  # ============================================================================
+  # ForgeRock Identity Management (PingIDM)
+  # Identity lifecycle, provisioning, reconciliation, workflows
+  # ============================================================================
+  pingidm:
+    image: gcr.io/forgerock-io/idm/pit1:8.0.0
+    container_name: pingidm.devnetwork.dev
+    hostname: pingidm.devnetwork.dev
+    networks:
+      forgerock-network:
+        ipv4_address: 172.16.0.30
+    ports:
+      - "8082:8080"     # HTTP
+      - "8445:8443"     # HTTPS
+    environment:
+      - OPENIDM_ADMIN_PASSWORD=${IDM_ADMIN_PASSWORD}
+      - OPENIDM_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+      - DS_HOST=pingds.devnetwork.dev
+      - DS_PORT=1389
+      - DS_ADMIN_PASSWORD=${DS_PASSWORD}
+      - AM_HOST=pingam.devnetwork.dev
+      - AM_PORT=8080
+      - JAVA_OPTS=-Xmx2g -Xms2g -server
+    volumes:
+      - pingidm-data:/opt/openidm/data
+      - ./config/idm:/opt/openidm/conf-custom
+      - ./scripts/idm:/opt/openidm/script-custom
+      - ./secrets:/opt/openidm/secrets
+    depends_on:
+      pingds:
+        condition: service_healthy
+      pingam:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-u", "openidm-admin:${IDM_ADMIN_PASSWORD}", "http://localhost:8080/openidm/info/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    labels:
+      - "com.forgerock.service=identity-management"
+      - "com.forgerock.compliance=dod-zerotrust"
+
+  # ============================================================================
+  # ForgeRock Identity Gateway (PingGateway)
+  # Reverse proxy, policy enforcement point, request filtering
+  # ============================================================================
+  pinggateway:
+    image: gcr.io/forgerock-io/ig/pit1:8.0.0
+    container_name: pinggateway.devnetwork.dev
+    hostname: pinggateway.devnetwork.dev
+    networks:
+      forgerock-network:
+        ipv4_address: 172.16.0.40
+    ports:
+      - "8083:8080"     # HTTP
+      - "8446:8443"     # HTTPS
+    environment:
+      - IG_RUN_MODE=production
+      - AM_HOST=pingam.devnetwork.dev
+      - AM_PORT=8080
+      - CATALINA_OPTS=-server -Xmx1g -Xms1g
+      - IG_INSTANCE_DIR=/var/ig
+    volumes:
+      - pinggateway-data:/var/ig
+      - ./config/gateway:/var/ig/config-custom
+      - ./scripts/gateway:/var/ig/scripts-custom
+      - ./secrets:/var/ig/secrets
+    depends_on:
+      pingam:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    labels:
+      - "com.forgerock.service=identity-gateway"
+      - "com.forgerock.compliance=dod-zerotrust"

@@ -1,0 +1,60 @@
+# ForgeRock Identity Platform - Git Ignore
+
+# Sensitive files
+.env
+secrets/
+*.key
+*.pem
+*.pfx
+*.p12
+*.jks
+
+# Persistent data
+PingData/
+PingBackups/
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+*-data/
+
+# Temporary files
+*.tmp
+*.temp
+~*
+
+# Windows specific
+Thumbs.db
+Desktop.ini
+
+# PowerShell
+*.ps1.backup
+
+# Certificates (except examples)
+certs/*.crt
+certs/*.key
+certs/*.pem
+!certs/README.md
+
+# Configuration backups
+config/**/*.bak
+config/**/*.old
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Compressed files from backups
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# ForgeRock specific
+deployment.key
+keystore.jceks
+truststore.jceks

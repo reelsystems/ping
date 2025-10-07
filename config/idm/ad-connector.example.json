@@ -1,0 +1,231 @@
+{
+  "name": "ActiveDirectory",
+  "displayName": "Active Directory Connector",
+  "description": "LDAP connector for Active Directory integration",
+  "connectorRef": {
+    "bundleName": "org.forgerock.openicf.connectors.ldap-connector",
+    "bundleVersion": "[1.5.0.0,2.0.0.0)",
+    "connectorName": "org.identityconnectors.ldap.LdapConnector"
+  },
+  "poolConfigOption": {
+    "maxObjects": 10,
+    "maxIdle": 10,
+    "maxWait": 150000,
+    "minEvictableIdleTimeMillis": 120000,
+    "minIdle": 1
+  },
+  "resultsHandlerConfig": {
+    "enableNormalizingResultsHandler": true,
+    "enableFilteredResultsHandler": true,
+    "enableCaseInsensitiveFilter": true,
+    "enableAttributesToGetSearchResultsHandler": true
+  },
+  "operationTimeout": {
+    "CREATE": -1,
+    "UPDATE": -1,
+    "DELETE": -1,
+    "TEST": -1,
+    "SCRIPT_ON_CONNECTOR": -1,
+    "SCRIPT_ON_RESOURCE": -1,
+    "GET": -1,
+    "RESOLVEUSERNAME": -1,
+    "AUTHENTICATE": -1,
+    "SEARCH": -1,
+    "VALIDATE": -1,
+    "SYNC": -1,
+    "SCHEMA": -1
+  },
+  "configurationProperties": {
+    "host": "192.168.1.2",
+    "port": 389,
+    "ssl": false,
+    "startTLS": false,
+    "failover": [
+      {
+        "host": "192.168.1.3",
+        "port": 389
+      }
+    ],
+    "principal": "CN=svc-forgerock,CN=Users,DC=devnetwork,DC=dev",
+    "credentials": {
+      "$crypto": {
+        "type": "x-simple-encryption",
+        "value": {
+          "cipher": "AES/CBC/PKCS5Padding",
+          "salt": "CHANGEME",
+          "data": "CHANGEME",
+          "iv": "CHANGEME",
+          "key": "openidm-sym-default",
+          "mac": "CHANGEME"
+        }
+      }
+    },
+    "baseContexts": [
+      "DC=devnetwork,DC=dev"
+    ],
+    "baseContextsToSynchronize": [
+      "CN=Users,DC=devnetwork,DC=dev",
+      "OU=Domain Users,DC=devnetwork,DC=dev"
+    ],
+    "accountSearchFilter": null,
+    "accountSynchronizationFilter": "(&(objectClass=user)(!(objectClass=computer)))",
+    "groupSearchFilter": null,
+    "groupSynchronizationFilter": "(objectClass=group)",
+    "passwordAttributeToSynchronize": null,
+    "synchronizePasswords": false,
+    "removeLogEntryObjectClassFromFilter": true,
+    "modifiersNamesToFilterOut": [
+      "CN=svc-forgerock,CN=Users,DC=devnetwork,DC=dev"
+    ],
+    "passwordDecryptionKey": null,
+    "changeLogBlockSize": 100,
+    "changeNumberAttribute": "uSNChanged",
+    "filterWithOrInsteadOfAnd": false,
+    "objectClassesToSynchronize": [
+      "user",
+      "group"
+    ],
+    "attributesToSynchronize": [
+      "cn",
+      "sAMAccountName",
+      "givenName",
+      "sn",
+      "mail",
+      "telephoneNumber",
+      "mobile",
+      "title",
+      "department",
+      "company",
+      "memberOf",
+      "objectGUID",
+      "whenChanged",
+      "whenCreated",
+      "userAccountControl"
+    ],
+    "vlvSortAttribute": "cn",
+    "accountObjectClasses": [
+      "top",
+      "person",
+      "organizationalPerson",
+      "user"
+    ],
+    "groupObjectClasses": [
+      "top",
+      "group"
+    ],
+    "accountUserNameAttributes": [
+      "sAMAccountName"
+    ],
+    "groupMemberAttribute": "member",
+    "passwordAttribute": "unicodePwd",
+    "useBlocks": false,
+    "blockSize": 100,
+    "usePagedResultControl": true,
+    "maintainPosixGroupMembership": false,
+    "maintainLdapGroupMembership": true,
+    "readSchema": false,
+    "respectResourcePasswordPolicyChangeAfterReset": false,
+    "uidAttribute": "objectGUID",
+    "groupNameAttribute": "cn"
+  },
+  "syncFailureHandler": {
+    "maxRetries": 5,
+    "postRetryAction": "logged-ignore"
+  },
+  "objectTypes": {
+    "account": {
+      "$schema": "http://json-schema.org/draft-03/schema",
+      "id": "account",
+      "type": "object",
+      "nativeType": "user",
+      "properties": {
+        "sAMAccountName": {
+          "type": "string",
+          "nativeName": "sAMAccountName",
+          "required": true
+        },
+        "cn": {
+          "type": "string",
+          "nativeName": "cn",
+          "required": true
+        },
+        "givenName": {
+          "type": "string",
+          "nativeName": "givenName"
+        },
+        "sn": {
+          "type": "string",
+          "nativeName": "sn",
+          "required": true
+        },
+        "mail": {
+          "type": "string",
+          "nativeName": "mail"
+        },
+        "telephoneNumber": {
+          "type": "string",
+          "nativeName": "telephoneNumber"
+        },
+        "mobile": {
+          "type": "string",
+          "nativeName": "mobile"
+        },
+        "title": {
+          "type": "string",
+          "nativeName": "title"
+        },
+        "department": {
+          "type": "string",
+          "nativeName": "department"
+        },
+        "company": {
+          "type": "string",
+          "nativeName": "company"
+        },
+        "memberOf": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "nativeName": "memberOf"
+        },
+        "objectGUID": {
+          "type": "string",
+          "nativeName": "objectGUID"
+        },
+        "userAccountControl": {
+          "type": "integer",
+          "nativeName": "userAccountControl"
+        }
+      }
+    },
+    "group": {
+      "$schema": "http://json-schema.org/draft-03/schema",
+      "id": "group",
+      "type": "object",
+      "nativeType": "group",
+      "properties": {
+        "cn": {
+          "type": "string",
+          "nativeName": "cn",
+          "required": true
+        },
+        "description": {
+          "type": "string",
+          "nativeName": "description"
+        },
+        "member": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "nativeName": "member"
+        },
+        "objectGUID": {
+          "type": "string",
+          "nativeName": "objectGUID"
+        }
+      }
+    }
+  }
+}
