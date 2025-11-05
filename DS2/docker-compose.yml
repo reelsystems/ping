@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  ds1:
+    image: openjdk:17-slim
+    container_name: ${CONTAINER_NAME}
+    hostname: ${HOSTNAME}
+    networks:
+      ping-network:
+        ipv4_address: ${NETWORK_IP}
+    ports:
+      - "${HOST_LDAPS_PORT}:${LDAPS_PORT}"
+      - "${HOST_ADMIN_PORT}:${ADMIN_PORT}"
+      - "${HOST_HTTP_PORT}:${HTTP_PORT}"
+      - "${HOST_HTTPS_PORT}:${HTTPS_PORT}"
+      - "${HOST_REPLICATION_PORT}:${REPLICATION_PORT}"
+    volumes:
+      - ${INSTALL_PATH}:/opt/opendj:ro
+      - ${DATA_VOLUME}:/opt/opendj/db
+      - ${LOGS_VOLUME}:/opt/opendj/logs
+      - ${CONFIG_VOLUME}:/opt/opendj/config
+      - ./setup.sh:/opt/setup.sh:ro
+    environment:
+      - JAVA_HOME=/usr/local/openjdk-17
+      - JAVA_OPTS=${JAVA_OPTS}
+      - SERVER_ID=${SERVER_ID}
+      - DEPLOYMENT_ID=${DEPLOYMENT_ID}
+      - DEPLOYMENT_ID_PASSWORD=${DEPLOYMENT_ID_PASSWORD}
+      - ROOT_USER_DN=${ROOT_USER_DN}
+      - ROOT_USER_PASSWORD=${ROOT_USER_PASSWORD}
+      - MONITOR_USER_PASSWORD=${MONITOR_USER_PASSWORD}
+      - HOSTNAME=${HOSTNAME}
+      - LDAP_PORT=${LDAP_PORT}
+      - LDAPS_PORT=${LDAPS_PORT}
+      - HTTPS_PORT=${HTTPS_PORT}
+      - ADMIN_PORT=${ADMIN_PORT}
+      - REPLICATION_PORT=${REPLICATION_PORT}
+      - BASE_DN=${BASE_DN}
+      - SETUP_PROFILE=${SETUP_PROFILE}
+      - ACCEPT_LICENSE=${ACCEPT_LICENSE}
+    working_dir: /opt/opendj
+    command: ["/bin/bash", "/opt/setup.sh"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/opt/opendj/bin/status", "--bindDN", "${ROOT_USER_DN}", "--bindPassword", "${ROOT_USER_PASSWORD}", "--script-friendly"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  ping-network:
+    external: true

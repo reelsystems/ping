@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  idm1:
+    image: openjdk:17-slim
+    container_name: ${CONTAINER_NAME}
+    hostname: ${HOSTNAME}
+    networks:
+      ping-network:
+        ipv4_address: ${NETWORK_IP}
+    ports:
+      - "${HOST_HTTP_PORT}:${HTTP_PORT}"
+      - "${HOST_HTTPS_PORT}:${HTTPS_PORT}"
+      - "${HOST_MUTUAL_AUTH_PORT}:${MUTUAL_AUTH_PORT}"
+    volumes:
+      - ${INSTALL_PATH}:/opt/openidm:ro
+      - ${CONF_VOLUME}:/opt/openidm/conf
+      - ${CONNECTORS_VOLUME}:/opt/openidm/connectors
+      - ${SCRIPT_VOLUME}:/opt/openidm/script
+      - ${LOGS_VOLUME}:/opt/openidm/logs
+      - ./startup.sh:/opt/startup.sh:ro
+    environment:
+      - JAVA_HOME=/usr/local/openjdk-17
+      - JAVA_OPTS=${JAVA_OPTS}
+      - OPENIDM_OPTS=${OPENIDM_OPTS}
+      - OPENIDM_HOST=${OPENIDM_HOST}
+      - INSTANCE_ID=${INSTANCE_ID}
+      - CLUSTER_ENABLED=${CLUSTER_ENABLED}
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - REPO_PRIMARY_HOST=${REPO_PRIMARY_HOST}
+      - REPO_PRIMARY_PORT=${REPO_PRIMARY_PORT}
+      - REPO_SECONDARY_HOST=${REPO_SECONDARY_HOST}
+      - REPO_SECONDARY_PORT=${REPO_SECONDARY_PORT}
+      - REPO_BIND_DN=${REPO_BIND_DN}
+      - REPO_BIND_PASSWORD=${REPO_BIND_PASSWORD}
+    working_dir: /opt/openidm
+    command: ["/bin/bash", "/opt/startup.sh"]
+    restart: unless-stopped
+    depends_on:
+      - ds1
+      - ds2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:${HTTPS_PORT}/openidm/info/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+networks:
+  ping-network:
+    external: true

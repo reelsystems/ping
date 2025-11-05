@@ -1,460 +1,584 @@
-# ForgeRock Identity Platform - Deployment Summary
+# Ping Identity Platform - Deployment Summary
 
-## What Has Been Created
+**Created**: 2025-11-04
+**Version**: 7.5.2
+**Environment**: Docker Compose (with K8s migration path)
 
-This repository contains a complete, production-ready ForgeRock Identity Platform deployment configured for DoD Zero Trust architecture.
+---
 
-### Core Files
+## What Was Created
 
-| File | Purpose |
-|------|---------|
-| **docker-compose.yml** | Orchestrates all four ForgeRock services with proper dependencies and health checks |
-| **.env** | Environment configuration with all passwords, paths, and settings (⚠️ SECURE THIS FILE) |
-| **instructions.md** | Complete 80+ page deployment guide with every detail you need |
-| **README.md** | Project overview and quick reference |
-| **QUICKSTART.md** | Condensed 5-step quick start guide |
-| **.gitignore** | Protects sensitive files from version control |
+This document summarizes all the files and configurations created for your Ping Identity platform deployment.
 
-### Scripts (PowerShell)
+### Documentation (7 Files)
 
-| Script | Purpose |
-|--------|---------|
-| **create-directories.ps1** | Sets up entire directory structure with proper permissions |
-| **backup.ps1** | Automated backup with compression and retention policies |
-| **restore.ps1** | Full restore from backup with safety checks |
-| **health-check.ps1** | Comprehensive health check with scoring system |
+1. **[README.md](README.md)** - Main project overview and quick start
+2. **[architecture.md](architecture.md)** - Complete architecture with diagrams
+3. **[WORKFLOW.md](WORKFLOW.md)** - Deployment workflow and tracking
+4. **[checklist.md](checklist.md)** - Comprehensive deployment checklist
+5. **[CONSIDERATIONS.md](CONSIDERATIONS.md)** - Production best practices
+6. **[INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md)** - Step-by-step installation
+7. **[k8s/README.md](k8s/README.md)** - Kubernetes migration roadmap
 
-### Configuration Examples
+### Docker Compose Configurations
 
-| File | Purpose |
-|------|---------|
-| **config/am/audit-config.example.json** | DoD-compliant audit logging configuration |
-| **config/gateway/servicenow-route.example.json** | ServiceNow integration with OAuth2 protection |
-| **config/idm/ad-connector.example.json** | Active Directory LDAP connector |
-| **config/idm/sync-mapping.example.json** | AD to managed user synchronization mapping |
+#### PingDS (4 Instances)
 
-## Architecture Overview
+Each DS instance has:
+- `.env` - Environment variables (ports, credentials, Java opts)
+- `docker-compose.yml` - Container configuration
+- `setup.sh` - Initialization script
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     ServiceNow Instance                     │
-│                 (SAML & OAuth/OIDC Protected)               │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         │ HTTPS
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              PingGateway (Identity Gateway)                 │
-│  • Reverse Proxy                                            │
-│  • Policy Enforcement Point                                 │
-│  • Rate Limiting                                            │
-│  • Security Headers                                         │
-│  Port: 8083 (HTTP), 8446 (HTTPS)                           │
-└──────────────┬────────────────────────┬─────────────────────┘
-               │                        │
-       ┌───────▼────────┐      ┌────────▼─────────┐
-       │    PingAM      │      │     PingIDM      │
-       │ (Access Mgmt)  │◄────►│ (Identity Mgmt)  │
-       │                │      │                  │
-       │ • SAML 2.0     │      │ • Provisioning   │
-       │ • OAuth2/OIDC  │      │ • Sync AD users  │
-       │ • MFA/TOTP     │      │ • Workflows      │
-       │ • Session Mgmt │      │ • Self-service   │
-       │                │      │                  │
-       │ Port: 8081     │      │ Port: 8082       │
-       └────────┬───────┘      └────────┬─────────┘
-                │                       │
-                └───────────┬───────────┘
-                            │
-                  ┌─────────▼──────────┐
-                  │      PingDS        │
-                  │  (Directory Svc)   │
-                  │                    │
-                  │ • LDAP Directory   │
-                  │ • Config Store     │
-                  │ • Token Store      │
-                  │                    │
-                  │ Ports: 1389, 1636  │
-                  └─────────┬──────────┘
-                            │
-              ┌─────────────┴─────────────┐
-              │                           │
-      ┌───────▼────────┐         ┌────────▼────────┐
-      │ AD DC Primary  │         │ AD DC Secondary │
-      │  192.168.1.2   │         │   192.168.1.3   │
-      └────────────────┘         └─────────────────┘
-```
+**DS1** (Primary):
+- Ports: 1636 (LDAPS), 4444 (Admin), 8080 (HTTP), 8443 (HTTPS), 8989 (Replication)
+- IP: 172.20.0.11
+- Files: [DS1/.env](DS1/.env), [DS1/docker-compose.yml](DS1/docker-compose.yml), [DS1/setup.sh](DS1/setup.sh)
 
-## Network & Port Configuration
+**DS2** (Fallback):
+- Ports: 1637, 4445, 8081, 8444, 8990
+- IP: 172.20.0.12
+- Files: [DS2/.env](DS2/.env), [DS2/docker-compose.yml](DS2/docker-compose.yml), [DS2/setup.sh](DS2/setup.sh)
 
-### External Access
+**DS3** (Replica):
+- Ports: 1638, 4446, 8082, 8445, 8991
+- IP: 172.20.0.13
+- Files: [DS3/.env](DS3/.env), [DS3/docker-compose.yml](DS3/docker-compose.yml), [DS3/setup.sh](DS3/setup.sh)
 
-| Service | HTTP | HTTPS | Purpose |
-|---------|------|-------|---------|
-| PingAM | 8081 | 8444 | Admin console, authentication APIs |
-| PingIDM | 8082 | 8445 | Admin UI, REST APIs |
-| PingGateway | 8083 | 8446 | Protected application access |
+**DS4** (Replica):
+- Ports: 1639, 4447, 8083, 8446, 8992
+- IP: 172.20.0.14
+- Files: [DS4/.env](DS4/.env), [DS4/docker-compose.yml](DS4/docker-compose.yml), [DS4/setup.sh](DS4/setup.sh)
 
-### Internal Services
+#### PingIDM (2 Instances)
 
-| Service | Ports | Purpose |
-|---------|-------|---------|
-| PingDS | 1389 (LDAP), 1636 (LDAPS), 4444 (Admin) | Directory operations |
+Each IDM instance has:
+- `.env` - Environment variables (ports, credentials, repository config)
+- `docker-compose.yml` - Container configuration
+- `startup.sh` - Initialization and configuration script
 
-### Active Directory
+**IDM1** (Primary):
+- Ports: 8090 (HTTP), 8453 (HTTPS)
+- IP: 172.20.0.21
+- Repository: DS1 (primary), DS2 (secondary)
+- Files: [IDM1/.env](IDM1/.env), [IDM1/docker-compose.yml](IDM1/docker-compose.yml), [IDM1/startup.sh](IDM1/startup.sh)
 
-| Server | IP | Ports |
-|--------|-----|-------|
-| Primary DC | 192.168.1.2 | 389 (LDAP), 636 (LDAPS) |
-| Secondary DC | 192.168.1.3 | 389 (LDAP), 636 (LDAPS) |
+**IDM2** (Fallback):
+- Ports: 8091 (HTTP), 8454 (HTTPS)
+- IP: 172.20.0.22
+- Repository: DS2 (primary), DS1 (secondary)
+- Files: [IDM2/.env](IDM2/.env), [IDM2/docker-compose.yml](IDM2/docker-compose.yml), [IDM2/startup.sh](IDM2/startup.sh)
 
-## Data Persistence
+#### PingAM (2 Instances)
 
-All data is stored in Windows-native paths for easy backup:
+Each AM instance has:
+- `.env` - Environment variables (ports, credentials, DS connections)
+- `docker-compose.yml` - Tomcat container configuration
+- `setenv.sh` - Tomcat environment setup
+
+**AM1** (Primary):
+- Ports: 8100 (HTTP)
+- IP: 172.20.0.31
+- DS Connections: DS1 (config, identity, CTS stores)
+- Files: [AM1/.env](AM1/.env), [AM1/docker-compose.yml](AM1/docker-compose.yml), [AM1/setenv.sh](AM1/setenv.sh)
+
+**AM2** (Fallback):
+- Ports: 8101 (HTTP)
+- IP: 172.20.0.32
+- DS Connections: DS2 (config, identity, CTS stores)
+- Files: [AM2/.env](AM2/.env), [AM2/docker-compose.yml](AM2/docker-compose.yml), [AM2/setenv.sh](AM2/setenv.sh)
+
+### Shared Resources
+
+**Installation Directory**:
+- `shared/install/` - Where ForgeRock software should be extracted
+- `shared/install/README.md` - Detailed extraction instructions
+
+**Other Directories**:
+- `shared/certs/` - SSL/TLS certificates
+- `shared/scripts/` - Utility scripts
+- `shared/backups/` - Backup storage
+
+### Directory Structure
 
 ```
-%USERPROFILE%\Documents\
-├── PingData\                    # Persistent data (Docker volumes)
-│   ├── ds\                      # Directory data
-│   ├── am\                      # AM configuration & sessions
-│   ├── idm\                     # IDM data & workflows
-│   └── gateway\                 # Gateway configs
+/home/thepackle/repos/ping/
+├── README.md
+├── architecture.md
+├── WORKFLOW.md
+├── checklist.md
+├── CONSIDERATIONS.md
+├── INSTALLATION-GUIDE.md
+├── DEPLOYMENT-SUMMARY.md (this file)
 │
-├── PingBackups\                 # Automated backups
-│   └── backup-YYYY-MM-DD_HH-mm-ss.zip
+├── DS1/
+│   ├── .env
+│   ├── docker-compose.yml
+│   ├── setup.sh
+│   ├── config/
+│   ├── data/
+│   └── logs/
 │
-└── ping\                        # Project directory (this repo)
-    ├── docker-compose.yml
-    ├── .env
-    ├── config\
-    ├── scripts\
-    └── certs\
+├── DS2/ (same structure)
+├── DS3/ (same structure)
+├── DS4/ (same structure)
+│
+├── IDM1/
+│   ├── .env
+│   ├── docker-compose.yml
+│   ├── startup.sh
+│   ├── conf/
+│   ├── connectors/
+│   ├── script/
+│   └── logs/
+│
+├── IDM2/ (same structure)
+│
+├── AM1/
+│   ├── .env
+│   ├── docker-compose.yml
+│   ├── setenv.sh
+│   ├── config/
+│   └── logs/
+│
+├── AM2/ (same structure)
+│
+├── shared/
+│   ├── install/
+│   │   └── README.md
+│   ├── certs/
+│   ├── scripts/
+│   └── backups/
+│
+└── k8s/
+    ├── README.md (Kubernetes migration roadmap)
+    ├── helm/
+    ├── manifests/
+    └── docs/
 ```
 
-## Security Features Implemented
+---
 
-### ✅ DoD Zero Trust Compliance
+## Key Configuration Variables
 
-- **TLS 1.2/1.3 only** with strong cipher suites
-- **Comprehensive audit logging** with 365-day retention
-- **Multi-factor authentication** (TOTP) support
-- **Strict session management** (30-minute timeout)
-- **Brute force protection** (3 attempts, 30-minute lockout)
-- **Device fingerprinting** for anomaly detection
-- **Policy-based access control** via PingGateway
-- **Security headers** (HSTS, CSP, X-Frame-Options, etc.)
-- **Rate limiting** on all endpoints
+### Passwords (Default - CHANGE THESE!)
 
-### ✅ Password Policies
-
-- Minimum 15 characters
-- Complexity requirements (upper, lower, number, special)
-- 24-password history
-- Account lockout after 3 failed attempts
-
-### ✅ Audit & Compliance
-
-- All authentication attempts logged
-- Configuration changes tracked
-- Session lifecycle events recorded
-- JSON and Syslog output formats
-- Automated daily compliance checks
-
-## Integration Capabilities
-
-### Active Directory
-
-- **Authentication** against AD domain controllers
-- **User synchronization** (one-way or bi-directional)
-- **Group membership** mapping
-- **Password policy** enforcement from AD
-- **Failover** between DC1 and DC2
-
-### ServiceNow
-
-- **SAML 2.0** single sign-on
-- **OAuth 2.0 / OIDC** for APIs
-- **Attribute mapping** (email, name, groups)
-- **Just-in-time provisioning**
-- **Session management**
-
-## Deployment Steps (High-Level)
-
-1. **Prepare Environment** (30 minutes)
-   - Install Docker Desktop on Windows Server 2019
-   - Create AD service account
-   - Configure firewall rules
-   - Generate SSL certificates
-
-2. **Configure** (15 minutes)
-   - Update `.env` with passwords and paths
-   - Generate deployment key
-   - Review configuration files
-
-3. **Deploy** (20 minutes)
-   - Run `create-directories.ps1`
-   - Execute `docker-compose up -d`
-   - Monitor logs during startup
-
-4. **Configure Integrations** (1-2 hours)
-   - Set up AD data stores in PingAM
-   - Configure authentication chains
-   - Set up PingIDM connectors
-   - Create sync mappings
-
-5. **ServiceNow Integration** (1-2 hours)
-   - Export/import SAML metadata
-   - Configure OAuth2 clients
-   - Test SSO flows
-
-6. **Harden & Test** (1-2 hours)
-   - Apply security configurations
-   - Enable audit logging
-   - Run compliance checks
-   - Test all authentication flows
-
-**Total Deployment Time: 4-6 hours**
-
-## Key Configuration Points
-
-### Critical Environment Variables
+All services use default passwords that **MUST** be changed before production:
 
 ```bash
-# Generate secure deployment key
-DEPLOYMENT_KEY=$(openssl rand -base64 32)
+# PingDS
+ROOT_USER_PASSWORD=ChangeMe123!
+DEPLOYMENT_ID_PASSWORD=ChangeMe123!
 
-# Use strong passwords (minimum 15 characters)
-DS_PASSWORD=YourSecurePassword123!@#
-AM_ADMIN_PASSWORD=YourSecurePassword123!@#
-IDM_ADMIN_PASSWORD=YourSecurePassword123!@#
+# PingIDM
+ADMIN_PASSWORD=admin
+REPO_BIND_PASSWORD=ChangeMe123!
 
-# AD service account credentials
-AD_BIND_DN=CN=svc-forgerock,CN=Users,DC=devnetwork,DC=dev
-AD_BIND_PASSWORD=YourADPassword123!@#
+# PingAM
+ADMIN_PASSWORD=ChangeMe123!
+CONFIG_STORE_PASSWORD=ChangeMe123!
+AGENT_PASSWORD=ChangeMe123!
 ```
 
-### Service Account Requirements
+**To Change**: Edit each `.env` file in the respective service directory.
 
-Create in Active Directory:
-- **Username**: `svc-forgerock`
-- **Permissions**: Read access to user/group OUs
-- **Group membership**: Create custom read-only group
-- **Password**: Never expires, cannot change
+### Network Configuration
 
-## Backup Strategy
+**Docker Network**: `ping-network` (172.20.0.0/16)
 
-### Automated Daily Backups
+All containers use static IPs on this network for predictable connectivity.
 
-```powershell
-# Schedule backup.ps1 to run at 2:00 AM
-# Retention: 30 days
-# Includes:
-#   - All configuration files
-#   - Docker volumes (compressed)
-#   - LDIF exports from PingDS
-#   - Certificates
+**Create Network**:
+```bash
+docker network create --driver bridge --subnet 172.20.0.0/16 --gateway 172.20.0.1 ping-network
 ```
 
-### Manual Backup
+### Installation Paths
 
-```powershell
-.\scripts\backup.ps1 -BackupPath "D:\Backups" -RetentionDays 90
+All Ping Identity software must be extracted to:
+
+```bash
+shared/install/opendj/      # PingDS 7.5.2
+shared/install/openidm/     # PingIDM 7.5.2
+shared/install/AM-7.5.2.war # PingAM 7.5.2
 ```
 
-### Restore
+See [shared/install/README.md](shared/install/README.md) for detailed instructions.
 
-```powershell
-.\scripts\restore.ps1 -BackupFile "C:\Path\To\backup-2024-01-01_02-00-00.zip"
-```
+---
 
-## Monitoring & Health Checks
+## Quick Start Guide
 
-### Automated Health Check
+### Prerequisites
 
-```powershell
-# Run health check
-.\scripts\health-check.ps1
-
-# Returns:
-# - EXCELLENT (90-100%): All systems operational
-# - GOOD (75-89%): Minor issues
-# - DEGRADED (50-74%): Several issues
-# - CRITICAL (<50%): Immediate action required
-```
-
-### Manual Monitoring
-
-```powershell
-# Service status
-docker-compose ps
-
-# Resource usage
-docker stats --no-stream
-
-# Recent errors
-docker-compose logs --tail=100 | Select-String "ERROR"
-
-# Specific service logs
-docker-compose logs -f pingam
-```
-
-## Troubleshooting Quick Reference
-
-| Issue | Solution |
-|-------|----------|
-| Services won't start | Check `docker-compose logs`, verify resource allocation |
-| Can't connect to AD | Test connectivity with `Test-Connection 192.168.1.2` |
-| Out of memory | Increase Docker Desktop memory to 16+ GB |
-| SSL errors | Verify certificates, check trust store |
-| Slow performance | Check resource usage with `docker stats` |
-| Authentication fails | Verify AD credentials, check data stores |
-
-## Air-Gapped Deployment
-
-For production air-gapped environments:
-
-1. **Export images** (internet-connected machine):
-   ```powershell
-   docker save gcr.io/forgerock-io/ds/pit1:8.0.0 -o pingds.tar
-   docker save gcr.io/forgerock-io/am/pit1:8.0.0 -o pingam.tar
-   docker save gcr.io/forgerock-io/idm/pit1:8.0.0 -o pingidm.tar
-   docker save gcr.io/forgerock-io/ig/pit1:8.0.0 -o pinggateway.tar
+1. **Install Docker and Docker Compose**:
+   ```bash
+   # Verify installation
+   docker --version  # Should be 20.10.0+
+   docker compose version  # Should be v2.0.0+
    ```
 
-2. **Transfer** TAR files to air-gapped environment
-
-3. **Load images** (air-gapped machine):
-   ```powershell
-   docker load -i pingds.tar
-   docker load -i pingam.tar
-   docker load -i pingidm.tar
-   docker load -i pinggateway.tar
+2. **Create Docker network**:
+   ```bash
+   docker network create --driver bridge --subnet 172.20.0.0/16 --gateway 172.20.0.1 ping-network
    ```
 
-4. **Deploy normally** using `docker-compose up -d`
+3. **Download and extract Ping software** to `shared/install/`:
+   - See [README.md - Installation File Locations](README.md#installation-file-locations)
 
-See [instructions.md - Private Docker Registry](instructions.md#private-docker-registry-setup-air-gapped) for complete air-gapped setup.
+### Deployment Order
 
-## Next Steps After Deployment
+**Deploy in this order for proper dependencies**:
 
-### Immediate (Day 1)
+1. **Start DS1 and DS2**:
+   ```bash
+   cd DS1 && docker compose up -d && cd ..
+   cd DS2 && docker compose up -d && cd ..
 
-1. ✅ Change all default passwords
-2. ✅ Configure AD integration
-3. ✅ Test authentication
-4. ✅ Enable audit logging
-5. ✅ Schedule automated backups
+   # Wait for initialization (2-3 minutes)
+   docker logs -f ds1-container  # Wait for "started successfully"
+   ```
 
-### Short Term (Week 1)
+2. **Configure replication** between DS1 and DS2:
+   ```bash
+   # See INSTALLATION-GUIDE.md for detailed commands
+   docker exec ds1-container /opt/opendj/bin/dsreplication enable ...
+   ```
 
-1. ✅ Configure ServiceNow integration
-2. ✅ Set up MFA for administrators
-3. ✅ Implement security policies
-4. ✅ Configure monitoring/alerting
-5. ✅ Test backup/restore procedures
+3. **Start DS3 and DS4** (optional):
+   ```bash
+   cd DS3 && docker compose up -d && cd ..
+   cd DS4 && docker compose up -d && cd ..
+   ```
 
-### Medium Term (Month 1)
+4. **Start IDM1 and IDM2**:
+   ```bash
+   cd IDM1 && docker compose up -d && cd ..
+   cd IDM2 && docker compose up -d && cd ..
 
-1. ✅ User acceptance testing
-2. ✅ Performance tuning
-3. ✅ Security hardening review
-4. ✅ Documentation of custom configs
-5. ✅ Disaster recovery plan
+   # Wait for "OpenIDM ready"
+   docker logs -f idm1-container
+   ```
 
-### Before Production
+5. **Configure DS for AM** (add AM schemas):
+   ```bash
+   # Run AM setup profiles on DS1
+   # See INSTALLATION-GUIDE.md Phase 4.1
+   ```
 
-1. ✅ Full security audit
-2. ✅ Load testing
-3. ✅ Penetration testing
-4. ✅ Compliance validation
-5. ✅ Runbook creation
-6. ✅ Team training
+6. **Start AM1 and AM2**:
+   ```bash
+   cd AM1 && docker compose up -d && cd ..
+   cd AM2 && docker compose up -d && cd ..
 
-## Support & Documentation
+   # Wait for Tomcat startup (2-3 minutes)
+   docker logs -f am1-container
+   ```
 
-### Included Documentation
+7. **Complete AM configuration** via web UI:
+   - Access: http://localhost:8100/am
+   - Follow configuration wizard
+   - See [INSTALLATION-GUIDE.md Phase 4](INSTALLATION-GUIDE.md#phase-4-pingam-deployment)
 
-- **instructions.md**: Complete 80+ page deployment guide
-- **QUICKSTART.md**: 5-step quick start
-- **README.md**: Project overview
-- **This file**: Deployment summary
+### Verification
+
+```bash
+# Check all containers are running
+docker ps --filter "name=ds" --filter "name=idm" --filter "name=am"
+
+# Access services
+echo "PingDS Admin: https://localhost:8443"
+echo "PingIDM Admin: https://localhost:8453/admin (admin/admin)"
+echo "PingAM Console: http://localhost:8100/am/console (amadmin/password)"
+
+# Check DS replication
+docker exec ds1-container /opt/opendj/bin/dsreplication status \
+  --adminUID admin --adminPassword ChangeMe123! \
+  --hostname localhost --port 4444 --trustAll --no-prompt
+
+# Check IDM health
+curl -k -u admin:admin https://localhost:8453/openidm/info/ping
+
+# Check AM health
+curl http://localhost:8100/am/isAlive.jsp
+```
+
+---
+
+## Important Environment Variables
+
+### PingDS (.env)
+
+```bash
+# Container settings
+CONTAINER_NAME=ds1-container
+HOSTNAME=ds1-container
+NETWORK_IP=172.20.0.11
+
+# Ports (adjust for each instance)
+HOST_LDAPS_PORT=1636
+HOST_ADMIN_PORT=4444
+HOST_HTTP_PORT=8080
+HOST_HTTPS_PORT=8443
+HOST_REPLICATION_PORT=8989
+
+# DS configuration
+SERVER_ID=ds1
+DEPLOYMENT_ID=ping-demo-deployment
+BASE_DN=dc=example,dc=com
+ROOT_USER_DN=cn=Directory Manager
+ROOT_USER_PASSWORD=ChangeMe123!
+
+# Java options
+JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC
+
+# Install path
+INSTALL_PATH=../shared/install/opendj
+```
+
+### PingIDM (.env)
+
+```bash
+# Container settings
+CONTAINER_NAME=idm1-container
+HOSTNAME=idm1-container
+NETWORK_IP=172.20.0.21
+
+# Ports
+HOST_HTTP_PORT=8090
+HOST_HTTPS_PORT=8453
+
+# IDM configuration
+INSTANCE_ID=idm1
+CLUSTER_ENABLED=true
+CLUSTER_NAME=idm-cluster
+
+# Repository (DS connection)
+REPO_PRIMARY_HOST=ds1-container
+REPO_PRIMARY_PORT=1636
+REPO_SECONDARY_HOST=ds2-container
+REPO_SECONDARY_PORT=1636
+REPO_BIND_DN=cn=Directory Manager
+REPO_BIND_PASSWORD=ChangeMe123!
+
+# Java options
+JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC
+
+# External connectors (optional)
+MSSQL1_HOST=your-sql-server1.example.com
+AD_HOST=your-ad-server.example.com
+```
+
+### PingAM (.env)
+
+```bash
+# Container settings
+CONTAINER_NAME=am1-container
+HOSTNAME=am1-container
+NETWORK_IP=172.20.0.31
+
+# Ports
+HOST_HTTP_PORT=8100
+
+# Tomcat
+CATALINA_OPTS=-Xms4g -Xmx4g -XX:+UseG1GC
+
+# AM configuration
+SITE_NAME=ping-site
+COOKIE_DOMAIN=.example.com
+
+# DS connections (config store)
+CONFIG_STORE_HOST=ds1-container
+CONFIG_STORE_PORT=1636
+CONFIG_STORE_SUFFIX=ou=am-config,dc=example,dc=com
+CONFIG_STORE_PASSWORD=ChangeMe123!
+
+# DS connections (identity store)
+IDENTITY_STORE_HOST=ds1-container
+IDENTITY_STORE_SUFFIX=ou=identities,dc=example,dc=com
+
+# DS connections (CTS store)
+CTS_STORE_HOST=ds1-container
+CTS_STORE_SUFFIX=ou=tokens,dc=example,dc=com
+
+# Admin credentials
+ADMIN_USERNAME=amadmin
+ADMIN_PASSWORD=ChangeMe123!
+```
+
+---
+
+## Common Operations
+
+### Start All Services
+
+```bash
+# Start DS instances
+for ds in DS1 DS2 DS3 DS4; do
+  cd $ds && docker compose up -d && cd ..
+done
+
+# Start IDM instances
+for idm in IDM1 IDM2; do
+  cd $idm && docker compose up -d && cd ..
+done
+
+# Start AM instances
+for am in AM1 AM2; do
+  cd $am && docker compose up -d && cd ..
+done
+```
+
+### Stop All Services
+
+```bash
+# Stop in reverse order
+for am in AM1 AM2; do
+  cd $am && docker compose down && cd ..
+done
+
+for idm in IDM1 IDM2; do
+  cd $idm && docker compose down && cd ..
+done
+
+for ds in DS1 DS2 DS3 DS4; do
+  cd $ds && docker compose down && cd ..
+done
+```
+
+### View Logs
+
+```bash
+# Follow logs for a specific service
+docker logs -f ds1-container
+docker logs -f idm1-container
+docker logs -f am1-container
+
+# View logs for all DS instances
+docker logs ds1-container
+docker logs ds2-container
+docker logs ds3-container
+docker logs ds4-container
+```
+
+### Restart a Service
+
+```bash
+# Restart single service
+cd DS1 && docker compose restart && cd ..
+
+# Or restart container directly
+docker restart ds1-container
+```
+
+### Update Configuration
+
+```bash
+# Edit .env file
+vi DS1/.env
+
+# Recreate container with new configuration
+cd DS1 && docker compose up -d --force-recreate && cd ..
+```
+
+---
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker logs <container-name>
+
+# Common issues:
+# 1. Port already in use - change HOST_*_PORT in .env
+# 2. Install files not found - verify shared/install/ contents
+# 3. Network not created - run: docker network create ping-network
+```
+
+### Cannot Connect to Service
+
+```bash
+# Check container is running
+docker ps | grep <container-name>
+
+# Check network connectivity
+docker exec idm1-container ping ds1-container
+
+# Check port is listening
+docker exec ds1-container netstat -tuln | grep 1636
+```
+
+### Configuration Not Applied
+
+```bash
+# Recreate container to pick up .env changes
+cd DS1 && docker compose up -d --force-recreate && cd ..
+
+# Or rebuild and recreate
+cd DS1 && docker compose up -d --build --force-recreate && cd ..
+```
+
+---
+
+## Next Steps
+
+1. **Review Documentation**:
+   - Start with [README.md](README.md)
+   - Read [architecture.md](architecture.md) for design details
+   - Follow [INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md) for deployment
+
+2. **Download Software**:
+   - Access ForgeRock Backstage
+   - Download PingDS, PingIDM, PingAM 7.5.2
+   - Extract to `shared/install/`
+
+3. **Customize Configuration**:
+   - Edit `.env` files to change default passwords
+   - Update `BASE_DN` if not using `dc=example,dc=com`
+   - Configure external system connections (SQL, AD)
+
+4. **Deploy**:
+   - Follow [Quick Start Guide](#quick-start-guide) above
+   - Or follow detailed [INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md)
+
+5. **Test**:
+   - Create test users in DS
+   - Configure authentication in AM
+   - Set up reconciliation in IDM
+   - Perform end-to-end testing
+
+6. **Plan for Kubernetes** (Future):
+   - Review [k8s/README.md](k8s/README.md)
+   - Set up K8s development cluster
+   - Begin migration planning
+
+---
+
+## Support
+
+### Internal Documentation
+
+- [README.md](README.md) - Project overview
+- [architecture.md](architecture.md) - Architecture details
+- [WORKFLOW.md](WORKFLOW.md) - Deployment workflow
+- [checklist.md](checklist.md) - Deployment checklist
+- [CONSIDERATIONS.md](CONSIDERATIONS.md) - Best practices
+- [INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md) - Step-by-step guide
+- [k8s/README.md](k8s/README.md) - Kubernetes roadmap
 
 ### External Resources
 
-- **ForgeRock Docs**: https://backstage.forgerock.com/docs/platform/8
-- **ForgeRock Community**: https://community.forgerock.com/
-- **DoD Zero Trust RA**: https://dodcio.defense.gov/zero-trust/
-- **NIST SP 800-207**: https://csrc.nist.gov/publications/detail/sp/800-207/final
-
-### Getting Help
-
-1. Review [instructions.md](instructions.md) troubleshooting section
-2. Check `docker-compose logs` for errors
-3. Run `.\scripts\health-check.ps1` for diagnostics
-4. Search ForgeRock Community forums
-5. Contact ForgeRock Support (if licensed)
-
-## Important Security Reminders
-
-⚠️ **BEFORE GOING TO PRODUCTION:**
-
-1. ✅ Replace ALL default passwords
-2. ✅ Generate NEW deployment key
-3. ✅ Use CA-signed certificates (not self-signed)
-4. ✅ Enable HTTPS for all services
-5. ✅ Configure external SIEM integration
-6. ✅ Set up external backup storage
-7. ✅ Implement network segmentation
-8. ✅ Enable all audit logging
-9. ✅ Configure monitoring/alerting
-10. ✅ Complete security assessment
-
-## Version Information
-
-- **ForgeRock Platform**: 8.0
-- **Docker Compose**: 3.8
-- **Target OS**: Windows Server 2019
-- **Docker Desktop**: 4.x+
-- **Deployment Version**: 1.0
-- **Last Updated**: 2024
+- **Ping Identity Docs**: https://docs.pingidentity.com
+- **Community Forum**: https://support.pingidentity.com/s/
+- **ForgeRock Backstage**: https://backstage.forgerock.com
 
 ---
 
-## Quick Command Reference
-
-```powershell
-# Start services
-docker-compose up -d
-
-# Stop services
-docker-compose down
-
-# View status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-
-# Health check
-.\scripts\health-check.ps1
-
-# Backup
-.\scripts\backup.ps1
-
-# Restore
-.\scripts\restore.ps1 -BackupFile "path\to\backup.zip"
-
-# Restart single service
-docker-compose restart pingam
-
-# Update configuration
-notepad .env
-docker-compose down
-docker-compose up -d
-```
+**Document Version**: 1.0
+**Last Updated**: 2025-11-04
+**Author**: IAM Engineering Team
 
 ---
 
-**You are now ready to deploy ForgeRock Identity Platform for Zero Trust!**
-
-Start with [QUICKSTART.md](QUICKSTART.md) for fast deployment, or [instructions.md](instructions.md) for comprehensive guidance.
+*End of Deployment Summary*

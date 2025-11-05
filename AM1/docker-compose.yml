@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  am1:
+    image: tomcat:9-jdk17
+    container_name: ${CONTAINER_NAME}
+    hostname: ${HOSTNAME}
+    networks:
+      ping-network:
+        ipv4_address: ${NETWORK_IP}
+    ports:
+      - "${HOST_HTTP_PORT}:${HTTP_PORT}"
+      - "${HOST_HTTPS_PORT}:${HTTPS_PORT}"
+    volumes:
+      - ${AM_WAR_FILE}:/usr/local/tomcat/webapps/am.war:ro
+      - ${CONFIG_VOLUME}:/opt/am/config
+      - ${LOGS_VOLUME}:/usr/local/tomcat/logs
+      - ./setenv.sh:/usr/local/tomcat/bin/setenv.sh:ro
+    environment:
+      - JAVA_HOME=/usr/local/openjdk-17
+      - CATALINA_OPTS=${CATALINA_OPTS}
+      - AM_SERVER_URL=${AM_SERVER_URL}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - SITE_NAME=${SITE_NAME}
+      - SITE_PRIMARY=${SITE_PRIMARY}
+      - LOAD_BALANCER_URL=${LOAD_BALANCER_URL}
+      - CONFIG_STORE_HOST=${CONFIG_STORE_HOST}
+      - CONFIG_STORE_PORT=${CONFIG_STORE_PORT}
+      - CONFIG_STORE_SUFFIX=${CONFIG_STORE_SUFFIX}
+      - CONFIG_STORE_BIND_DN=${CONFIG_STORE_BIND_DN}
+      - CONFIG_STORE_PASSWORD=${CONFIG_STORE_PASSWORD}
+      - CONFIG_STORE_SSL=${CONFIG_STORE_SSL}
+      - IDENTITY_STORE_HOST=${IDENTITY_STORE_HOST}
+      - IDENTITY_STORE_PORT=${IDENTITY_STORE_PORT}
+      - IDENTITY_STORE_SUFFIX=${IDENTITY_STORE_SUFFIX}
+      - IDENTITY_STORE_BIND_DN=${IDENTITY_STORE_BIND_DN}
+      - IDENTITY_STORE_PASSWORD=${IDENTITY_STORE_PASSWORD}
+      - IDENTITY_STORE_SSL=${IDENTITY_STORE_SSL}
+      - CTS_STORE_HOST=${CTS_STORE_HOST}
+      - CTS_STORE_PORT=${CTS_STORE_PORT}
+      - CTS_STORE_SUFFIX=${CTS_STORE_SUFFIX}
+      - CTS_STORE_BIND_DN=${CTS_STORE_BIND_DN}
+      - CTS_STORE_PASSWORD=${CTS_STORE_PASSWORD}
+      - CTS_STORE_SSL=${CTS_STORE_SSL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - AGENT_PASSWORD=${AGENT_PASSWORD}
+    restart: unless-stopped
+    depends_on:
+      - ds1
+      - ds2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${HTTP_PORT}/am/isAlive.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 240s
+
+networks:
+  ping-network:
+    external: true
