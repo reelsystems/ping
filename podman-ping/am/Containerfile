@@ -1,0 +1,48 @@
+# Ping Access Manager (AM) Containerfile for Podman
+# Based on ForgeOps PingAM with RHEL/Podman optimizations
+
+ARG BASE_IMAGE=docker.io/pingidentity/pingaccess:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Install utilities for RHEL-based systems
+RUN microdnf update -y && \
+    microdnf install -y nmap-ncat bind-utils procps-ng wget && \
+    microdnf clean all
+
+USER forgerock
+
+# AM configuration directory
+ENV AM_HOME=/opt/openam \
+    CATALINA_HOME=/usr/local/tomcat \
+    JAVA_OPTS="-server -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# Copy configuration profiles
+ARG CONFIG_PROFILE=default
+COPY --chown=forgerock:root config/${CONFIG_PROFILE}/ ${AM_HOME}/config/
+
+# Copy custom scripts
+COPY --chown=forgerock:root scripts/ /home/forgerock/scripts/
+
+# Create logging directory for Logback
+RUN mkdir -p /home/forgerock/logs
+
+# Environment for Logback configuration
+ENV CATALINA_OPTS="-Dlogback.configurationFile=/home/forgerock/scripts/logback.xml"
+
+# Expose ports
+# HTTP/HTTPS for AM access
+EXPOSE 8080 8443
+# JMX monitoring (optional)
+EXPOSE 9010
+# Debug port (commented for production)
+# EXPOSE 9009
+
+# Health check - AM admin endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+  CMD curl -f http://localhost:8080/am/isAlive.jsp || exit 1
+
+WORKDIR /home/forgerock
+
+# Entry point inherited from base image

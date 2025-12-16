@@ -1,0 +1,45 @@
+# Ping DS Proxy Containerfile for Podman
+# Based on ForgeOps DS-Proxy - provides LDAP proxy for AM configuration store
+
+ARG BASE_IMAGE=docker.io/pingidentity/pingdirectoryproxy:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Install debugging and networking tools
+RUN microdnf update -y && \
+    microdnf install -y nmap-ncat bind-utils procps-ng && \
+    microdnf clean all
+
+USER forgerock
+
+# DS Proxy environment
+ENV DS_PROXY_HOME=/opt/opendj \
+    DS_DATA_DIR=/opt/opendj/data
+
+# Proxy configuration for AM config store
+ENV PROXY_LDAP_PORT=1389 \
+    PROXY_LDAPS_PORT=1636 \
+    PROXY_ADMIN_PORT=4444 \
+    PROXY_HTTP_PORT=8080 \
+    PROXY_HTTPS_PORT=8443
+
+# Copy configuration
+COPY --chown=forgerock:root config/ /opt/opendj/config/
+COPY --chown=forgerock:root scripts/ /opt/opendj/scripts/
+
+# Expose ports
+# LDAP/LDAPS for proxy access
+EXPOSE 1389 1636
+# HTTP/HTTPS for REST APIs
+EXPOSE 8080 8443
+# Admin port
+EXPOSE 4444
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD /opt/opendj/bin/status --bindDN "cn=Directory Manager" --useSSL --trustAll || exit 1
+
+WORKDIR /opt/opendj
+
+# Entry point inherited from base image

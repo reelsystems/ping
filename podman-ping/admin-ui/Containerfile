@@ -1,0 +1,17 @@
+# Ping Admin UI Containerfile for Podman
+# Based on ForgeOps Admin UI
+
+ARG BASE_IMAGE=docker.io/pingidentity/pingadmin-ui:latest
+FROM ${BASE_IMAGE}
+
+# This is a minimal frontend application
+# The base image contains the compiled admin UI static files
+
+# Expose HTTP port for UI access
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/ || exit 1
+
+# Entry point inherited from base image (typically nginx or similar web server)

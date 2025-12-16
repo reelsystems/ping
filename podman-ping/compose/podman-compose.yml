@@ -1,0 +1,316 @@
+version: '3.8'
+
+# Ping Identity Platform on Podman
+# Complete stack: DS, DS-Proxy, AM, IDM, IG, Admin-UI, Login-UI
+
+networks:
+  ping-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  ds-data-1:
+    driver: local
+  ds-data-2:
+    driver: local
+  ds-proxy-data:
+    driver: local
+  am-data:
+    driver: local
+  idm-data:
+    driver: local
+  ig-data:
+    driver: local
+  mysql-data:
+    driver: local
+  shared-certs:
+    driver: local
+
+services:
+  # MySQL Database for IDM
+  mysql:
+    image: docker.io/library/mysql:8.0
+    container_name: ping-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_DATABASE: openidm
+      MYSQL_USER: openidm
+      MYSQL_PASSWORD: openidm
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../configs/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "3306:3306"
+
+  # Primary Directory Server (DS-1)
+  ds-1:
+    build:
+      context: ../ds
+      dockerfile: Containerfile
+    container_name: ping-ds-1
+    hostname: ds-1.ping.local
+    environment:
+      DS_INSTANCE_NAME: ds-1
+      DS_SERVER_ID: 1
+      ROOT_USER_DN: "cn=Directory Manager"
+      ROOT_USER_PASSWORD: changeme
+      BASE_DN: "dc=example,dc=com"
+      REPLICATION_TYPE: multimaster
+      TOPOLOGY_PREFIX: rs
+    volumes:
+      - ds-data-1:/opt/opendj/data
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.20
+    ports:
+      - "1389:1389"   # LDAP
+      - "1636:1636"   # LDAPS
+      - "4444:4444"   # Admin
+      - "8080:8080"   # HTTP
+      - "8443:8443"   # HTTPS
+      - "8989:8989"   # Replication
+    healthcheck:
+      test: ["CMD", "/opt/opendj/bin/status", "--bindDN", "cn=Directory Manager", "--bindPassword", "changeme", "--useSSL", "--trustAll"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # Secondary Directory Server (DS-2) for Replication
+  ds-2:
+    build:
+      context: ../ds
+      dockerfile: Containerfile
+    container_name: ping-ds-2
+    hostname: ds-2.ping.local
+    environment:
+      DS_INSTANCE_NAME: ds-2
+      DS_SERVER_ID: 2
+      ROOT_USER_DN: "cn=Directory Manager"
+      ROOT_USER_PASSWORD: changeme
+      BASE_DN: "dc=example,dc=com"
+      REPLICATION_TYPE: multimaster
+      REPLICATION_PEER: ds-1.ping.local:8989
+      TOPOLOGY_PREFIX: rs
+    volumes:
+      - ds-data-2:/opt/opendj/data
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.21
+    ports:
+      - "1390:1389"   # LDAP (different host port)
+      - "1637:1636"   # LDAPS
+      - "4445:4444"   # Admin
+      - "8081:8080"   # HTTP
+      - "8444:8443"   # HTTPS
+      - "8990:8989"   # Replication
+    depends_on:
+      ds-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/opendj/bin/status", "--bindDN", "cn=Directory Manager", "--bindPassword", "changeme", "--useSSL", "--trustAll"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # DS Proxy for AM Config Store
+  ds-proxy:
+    build:
+      context: ../ds-proxy
+      dockerfile: Containerfile
+    container_name: ping-ds-proxy
+    hostname: ds-proxy.ping.local
+    environment:
+      PROXY_INSTANCE_NAME: ds-proxy
+      BACKEND_SERVERS: "ds-1.ping.local:1389,ds-2.ping.local:1389"
+      ROOT_USER_DN: "cn=Directory Manager"
+      ROOT_USER_PASSWORD: changeme
+    volumes:
+      - ds-proxy-data:/opt/opendj/data
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.22
+    ports:
+      - "1391:1389"   # LDAP
+      - "1638:1636"   # LDAPS
+      - "4446:4444"   # Admin
+    depends_on:
+      - ds-1
+      - ds-2
+    healthcheck:
+      test: ["CMD", "/opt/opendj/bin/status", "--bindDN", "cn=Directory Manager", "--bindPassword", "changeme", "--useSSL", "--trustAll"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # Access Manager (AM)
+  am:
+    build:
+      context: ../am
+      dockerfile: Containerfile
+    container_name: ping-am
+    hostname: am.ping.local
+    environment:
+      AM_STORES_CTS_SERVERS: "ds-1.ping.local:1389,ds-2.ping.local:1389"
+      AM_STORES_USER_SERVERS: "ds-1.ping.local:1389,ds-2.ping.local:1389"
+      AM_STORES_APPLICATION_SERVERS: "ds-proxy.ping.local:1389"
+      ROOT_USER_DN: "cn=Directory Manager"
+      ROOT_USER_PASSWORD: changeme
+      AM_ADMIN_PASSWORD: changeme
+      CATALINA_OPTS: "-Xmx2g -server"
+    volumes:
+      - am-data:/opt/openam/data
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.30
+    ports:
+      - "8082:8080"   # HTTP
+      - "8445:8443"   # HTTPS
+    depends_on:
+      ds-1:
+        condition: service_healthy
+      ds-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/am/isAlive.jsp"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
+
+  # Identity Manager (IDM)
+  idm:
+    build:
+      context: ../idm
+      dockerfile: Containerfile
+    container_name: ping-idm
+    hostname: idm.ping.local
+    environment:
+      OPENIDM_ADMIN_USERNAME: openidm-admin
+      OPENIDM_ADMIN_PASSWORD: changeme
+      OPENIDM_REPO_HOST: ping-mysql
+      OPENIDM_REPO_PORT: 3306
+      OPENIDM_REPO_DB: openidm
+      OPENIDM_REPO_USER: openidm
+      OPENIDM_REPO_PASSWORD: openidm
+      DS_HOST: ds-1.ping.local
+      DS_PORT: 1389
+      DS_BIND_DN: "cn=Directory Manager"
+      DS_BIND_PASSWORD: changeme
+    volumes:
+      - idm-data:/opt/openidm/data
+      - ../configs/ad-connector:/opt/openidm/conf/provisioner.openicf-ad.json:ro
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.40
+    ports:
+      - "8083:8080"   # HTTP
+      - "8446:8443"   # HTTPS
+      - "8447:8444"   # Mutual auth
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ds-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/openidm/info/ping"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
+
+  # Identity Gateway (IG)
+  ig:
+    build:
+      context: ../ig
+      dockerfile: Containerfile
+    container_name: ping-ig
+    hostname: ig.ping.local
+    environment:
+      IG_AM_URL: "http://am.ping.local:8080/am"
+      IG_IDM_URL: "https://idm.ping.local:8443/openidm"
+      IG_DS_URL: "ldap://ds-1.ping.local:1389"
+    volumes:
+      - ig-data:/var/ig/data
+      - shared-certs:/var/run/secrets/keys:ro
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.50
+    ports:
+      - "8084:8080"   # HTTP
+      - "8448:8443"   # HTTPS
+    depends_on:
+      - am
+      - idm
+      - ds-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ig/status"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # Admin UI
+  admin-ui:
+    build:
+      context: ../admin-ui
+      dockerfile: Containerfile
+    container_name: ping-admin-ui
+    hostname: admin-ui.ping.local
+    environment:
+      AM_URL: "http://am.ping.local:8080/am"
+      IDM_URL: "https://idm.ping.local:8443/openidm"
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.60
+    ports:
+      - "8085:8080"   # HTTP
+    depends_on:
+      - am
+      - idm
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # Login UI
+  login-ui:
+    build:
+      context: ../login-ui
+      dockerfile: Containerfile
+    container_name: ping-login-ui
+    hostname: login-ui.ping.local
+    environment:
+      AM_URL: "http://am.ping.local:8080/am"
+    networks:
+      ping-network:
+        ipv4_address: 172.28.0.61
+    ports:
+      - "8086:8080"   # HTTP
+    depends_on:
+      - am
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

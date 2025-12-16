@@ -1,0 +1,38 @@
+# Ping Identity Gateway (IG) Containerfile for Podman
+# Based on ForgeOps PingIG with RHEL/Podman optimizations
+
+ARG BASE_IMAGE=docker.io/pingidentity/pinggateway:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Install utilities
+RUN microdnf update -y && \
+    microdnf install -y nmap-ncat bind-utils procps-ng && \
+    microdnf clean all
+
+USER forgerock
+
+# IG configuration directory
+ENV IG_HOME=/var/ig \
+    JAVA_OPTS="-server -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# Copy configuration profile
+ARG CONFIG_PROFILE=default
+RUN echo "Building IG with profile: ${CONFIG_PROFILE}"
+COPY --chown=forgerock:root config/${CONFIG_PROFILE}/ ${IG_HOME}/config/
+
+# Copy scripts if needed
+COPY --chown=forgerock:root scripts/ ${IG_HOME}/scripts/ 2>/dev/null || true
+
+# Expose ports
+# HTTP/HTTPS for gateway access
+EXPOSE 8080 8443
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD curl -f http://localhost:8080/ig/status || exit 1
+
+WORKDIR ${IG_HOME}
+
+# Entry point inherited from base image

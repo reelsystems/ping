@@ -1,0 +1,199 @@
+{
+  "name": "ad",
+  "displayName": "Active Directory Connector",
+  "description": "Connector for Active Directory using LDAP",
+  "connectorRef": {
+    "bundleName": "org.forgerock.openicf.connectors.ldap-connector",
+    "bundleVersion": "[1.5.0.0,2.0.0.0)",
+    "connectorName": "org.identityconnectors.ldap.LdapConnector"
+  },
+  "producerBufferSize": 100,
+  "connectorPoolingSupported": true,
+  "poolConfigOption": {
+    "maxObjects": 10,
+    "maxIdle": 10,
+    "maxWait": 150000,
+    "minEvictableIdleTimeMillis": 120000,
+    "minIdle": 1
+  },
+  "operationTimeout": {
+    "CREATE": -1,
+    "TEST": -1,
+    "AUTHENTICATE": -1,
+    "SEARCH": -1,
+    "VALIDATE": -1,
+    "GET": -1,
+    "UPDATE": -1,
+    "DELETE": -1,
+    "SCRIPT_ON_CONNECTOR": -1,
+    "SCRIPT_ON_RESOURCE": -1,
+    "SYNC": -1,
+    "SCHEMA": -1
+  },
+  "configurationProperties": {
+    "host": "ad.example.com",
+    "port": 636,
+    "ssl": true,
+    "startTLS": false,
+    "trustAllServerCertificates": false,
+    "principal": "CN=Service Account,CN=Users,DC=example,DC=com",
+    "credentials": {
+      "$crypto": {
+        "type": "x-simple-encryption",
+        "value": {
+          "cipher": "AES/CBC/PKCS5Padding",
+          "data": "CHANGE_ME_TO_ENCRYPTED_PASSWORD",
+          "iv": "CHANGE_ME_TO_IV",
+          "key": "openidm-sym-default"
+        }
+      }
+    },
+    "baseContexts": [
+      "CN=Users,DC=example,DC=com",
+      "OU=Groups,DC=example,DC=com"
+    ],
+    "baseContextsToSynchronize": [
+      "CN=Users,DC=example,DC=com"
+    ],
+    "accountSearchFilter": null,
+    "accountSynchronizationFilter": "(&(objectClass=user)(!(objectClass=computer)))",
+    "groupSearchFilter": null,
+    "groupSynchronizationFilter": "(objectClass=group)",
+    "passwordAttributeToSynchronize": null,
+    "synchronizePasswords": false,
+    "removeLogEntryObjectClassFromFilter": true,
+    "modifiersNamesToFilterOut": [],
+    "passwordDecryptionKey": null,
+    "changeLogBlockSize": 100,
+    "attributesToSynchronize": [
+      "cn",
+      "sAMAccountName",
+      "userPrincipalName",
+      "givenName",
+      "sn",
+      "mail",
+      "memberOf",
+      "objectGUID",
+      "userAccountControl"
+    ],
+    "changeNumberAttribute": "uSNChanged",
+    "passwordAttribute": "unicodePwd",
+    "accountObjectClasses": [
+      "top",
+      "person",
+      "organizationalPerson",
+      "user"
+    ],
+    "accountUserNameAttributes": [
+      "sAMAccountName"
+    ],
+    "groupMemberAttribute": "member",
+    "maintainLdapGroupMembership": false,
+    "maintainPosixGroupMembership": false,
+    "failover": [],
+    "readSchema": false,
+    "useBlocks": false,
+    "blockSize": 100,
+    "usePagedResultControl": true,
+    "vlvSortAttribute": "uid",
+    "uidAttribute": "objectGUID",
+    "respectResourcePasswordPolicyChangeAfterReset": false
+  },
+  "objectTypes": {
+    "account": {
+      "$schema": "http://json-schema.org/draft-03/schema",
+      "id": "__ACCOUNT__",
+      "type": "object",
+      "nativeType": "__ACCOUNT__",
+      "properties": {
+        "cn": {
+          "type": "string",
+          "nativeName": "cn",
+          "nativeType": "string",
+          "required": true
+        },
+        "sAMAccountName": {
+          "type": "string",
+          "nativeName": "sAMAccountName",
+          "nativeType": "string",
+          "required": true
+        },
+        "userPrincipalName": {
+          "type": "string",
+          "nativeName": "userPrincipalName",
+          "nativeType": "string"
+        },
+        "givenName": {
+          "type": "string",
+          "nativeName": "givenName",
+          "nativeType": "string"
+        },
+        "sn": {
+          "type": "string",
+          "nativeName": "sn",
+          "nativeType": "string",
+          "required": true
+        },
+        "mail": {
+          "type": "string",
+          "nativeName": "mail",
+          "nativeType": "string"
+        },
+        "memberOf": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "nativeType": "string"
+          },
+          "nativeName": "memberOf",
+          "nativeType": "string"
+        },
+        "objectGUID": {
+          "type": "string",
+          "nativeName": "objectGUID",
+          "nativeType": "string"
+        },
+        "userAccountControl": {
+          "type": "string",
+          "nativeName": "userAccountControl",
+          "nativeType": "string"
+        },
+        "dn": {
+          "type": "string",
+          "nativeName": "__NAME__",
+          "nativeType": "string",
+          "required": true
+        }
+      }
+    },
+    "group": {
+      "$schema": "http://json-schema.org/draft-03/schema",
+      "id": "__GROUP__",
+      "type": "object",
+      "nativeType": "__GROUP__",
+      "properties": {
+        "cn": {
+          "type": "string",
+          "nativeName": "cn",
+          "nativeType": "string",
+          "required": true
+        },
+        "member": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "nativeType": "string"
+          },
+          "nativeName": "member",
+          "nativeType": "string"
+        },
+        "dn": {
+          "type": "string",
+          "nativeName": "__NAME__",
+          "nativeType": "string",
+          "required": true
+        }
+      }
+    }
+  }
+}

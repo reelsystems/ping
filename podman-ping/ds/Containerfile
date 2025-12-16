@@ -1,0 +1,59 @@
+# Ping Directory Server (DS) Containerfile for Podman
+# Based on ForgeOps PingDS with RHEL/Podman optimizations
+
+ARG BASE_IMAGE=docker.io/pingidentity/pingdirectory:latest
+FROM ${BASE_IMAGE}
+
+# Install debugging and networking tools for RHEL-based systems
+USER root
+RUN microdnf update -y && \
+    microdnf install -y nmap-ncat bind-utils procps-ng && \
+    microdnf clean all
+
+USER forgerock
+
+# PVC mount point for persistent data
+ENV DS_DATA_DIR=/opt/opendj/data
+
+# PEM-based certificate locations
+# These paths are configured at build time
+ENV PEM_KEYS_DIRECTORY="/var/run/secrets/keys/ds" \
+    PEM_TRUSTSTORE_DIRECTORY="/var/run/secrets/keys/truststore"
+
+# Replication configuration
+ENV REPLICATION_PORT=8989 \
+    REPLICATION_ADMIN_PORT=4444 \
+    LDAPS_PORT=1636 \
+    LDAP_PORT=1389 \
+    HTTPS_PORT=8443 \
+    HTTP_PORT=8080
+
+# Copy runtime scripts
+COPY --chown=forgerock:root scripts/ /opt/opendj/scripts/
+
+# Create custom schema directory
+RUN mkdir -p /opt/opendj/custom-schema
+
+# Copy custom schema files if available
+COPY --chown=forgerock:root config/schema/*.ldif /opt/opendj/custom-schema/ 2>/dev/null || true
+
+# Copy LDIF extensions
+COPY --chown=forgerock:root config/ldif-ext/ /opt/opendj/ldif-ext/ 2>/dev/null || true
+
+# Expose ports
+# LDAP/LDAPS for directory access
+EXPOSE 1389 1636
+# HTTP/HTTPS for REST APIs and monitoring
+EXPOSE 8080 8443
+# Admin port for dsconfig
+EXPOSE 4444
+# Replication port
+EXPOSE 8989
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD /opt/opendj/bin/status --bindDN "cn=Directory Manager" --useSSL --trustAll || exit 1
+
+WORKDIR /opt/opendj
+
+# Entry point will be inherited from base image or specified at runtime

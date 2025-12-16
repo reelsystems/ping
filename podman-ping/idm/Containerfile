@@ -1,0 +1,45 @@
+# Ping Identity Manager (IDM) Containerfile for Podman
+# Based on ForgeOps PingIDM with RHEL/Podman optimizations
+
+ARG BASE_IMAGE=docker.io/pingidentity/pingidentitymanager:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Install OpenSSL and utilities
+RUN microdnf update -y && \
+    microdnf install -y openssl nmap-ncat bind-utils procps-ng && \
+    microdnf clean all
+
+# Security hardening - remove Felix OSGI Console (not needed in production)
+RUN rm -f /opt/openidm/bundle/org.apache.felix.webconsole*.jar \
+          /opt/openidm/bundle/openidm-felix-webconsole-*.jar
+
+USER 11111
+
+# IDM environment variables
+ENV OPENIDM_HOME=/opt/openidm \
+    JAVA_OPTS="-server -XX:InitialRAMPercentage=65.0 -XX:MaxRAMPercentage=65.0 -XX:+UseContainerSupport -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+
+# Copy configuration profile
+ARG CONFIG_PROFILE=default
+RUN echo "Building IDM with profile: ${CONFIG_PROFILE}"
+COPY --chown=11111:root config/${CONFIG_PROFILE}/ ${OPENIDM_HOME}/conf/
+
+# Copy additional configuration files
+COPY --chown=11111:root config/connectors/ ${OPENIDM_HOME}/connectors/ 2>/dev/null || true
+COPY --chown=11111:root scripts/ ${OPENIDM_HOME}/script/ 2>/dev/null || true
+
+# Expose ports
+# HTTP/HTTPS for IDM access
+EXPOSE 8080 8443
+# Mutual authentication port
+EXPOSE 8444
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+  CMD curl -f -k https://localhost:8443/openidm/info/ping || exit 1
+
+WORKDIR ${OPENIDM_HOME}
+
+# Entry point inherited from base image
